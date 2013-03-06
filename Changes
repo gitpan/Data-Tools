@@ -3,3 +3,9 @@ Revision history for Perl extension Data::Tools
 1.00  2013.03.06
 
     1. history lost, initial CPAN release
+
+1.01  2013.03.07
+
+    1. fixed names in the docs
+    
+    

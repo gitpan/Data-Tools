@@ -11,7 +11,7 @@
 package Data::Tools;
 
 use Exporter;
-our $VERSION = '1.0';
+our $VERSION = '1.01';
 our @ISA    = qw( Exporter );
 our @EXPORT = qw(
               file_save
@@ -222,7 +222,7 @@ INIT  { __url_escapes_init(); }
 
 =head1 NAME
 
-Exception::Sink - general purpose compact exception handling.
+  Data::Tools provides set of basic functions for data manipulation.
 
 =head1 SYNOPSIS
 
