@@ -9,9 +9,13 @@
 #
 ##############################################################################
 package Data::Tools;
-
+use strict;
 use Exporter;
-our $VERSION = '1.01';
+use Digest::Whirlpool;
+use Digest::MD5;
+use Digest::SHA1;
+
+our $VERSION = '1.02';
 our @ISA    = qw( Exporter );
 our @EXPORT = qw(
               file_save
@@ -35,6 +39,10 @@ our @EXPORT = qw(
               
               perl_package_to_file
 
+              wp_hex
+              md5_hex
+              sha1_hex
+
             );
 
 our %EXPORT_TAGS = (
@@ -43,7 +51,6 @@ our %EXPORT_TAGS = (
                    
                    );
             
-use strict;
 
 ##############################################################################
 
@@ -212,6 +219,37 @@ sub perl_package_to_file
 
 ##############################################################################
 
+sub wp_hex
+{
+  my $s = shift;
+
+  my $wp = Digest->new( 'Whirlpool' );
+  $wp->add( $s );
+  my $hex = $wp->hexdigest();
+
+  return $hex;
+}
+
+sub md5_hex
+{
+  my $s = shift;
+
+  my $hex = Digest::MD5::md5_hex( $s );
+
+  return $hex;
+}
+
+sub sha1_hex
+{
+  my $s = shift;
+
+  my $hex = Digest::SHA1::sha1_hex( $s );
+
+  return $hex;
+}
+
+##############################################################################
+
 BEGIN { __url_escapes_init(); }
 INIT  { __url_escapes_init(); }
 
@@ -232,6 +270,7 @@ INIT  { __url_escapes_init(); }
   my $data = file_load( $file_name );
   
   my $res  = dir_path_make( '/path/to/somewhere' ); # create full path with 0700
+  my $res  = dir_path_make( '/new/path', MASK => 0755 ); # ...with mask 0755
   my $path = dir_path_ensure( '/path/s/t/h' ); # ensure path exists, check+make
   
   my $escaped   = str_url_escape( $plain_str ); # url-style %XX escaping
@@ -240,14 +279,19 @@ INIT  { __url_escapes_init(); }
   my $hex_str   = str_hex( $plain_str ); # hex-style string escaping
   my $plain_str = str_unhex( $hex_str );
   
-  my $hash_str = hash2str( $hash_reference ); # convert hash to string "key=value\n"
-  my $hash_reference = str2hash( $hash_str );
+  my $hash_str = hash2str( $hash_ref ); # convert hash to string "key=value\n"
+  my $hash_ref = str2hash( $hash_str );
   
   # save/load hash in str_url_escaped form to/from a file
-  my $res            = hash_save( $file_name, $hash_reference );
-  my $hash_reference = hash_load( $file_name );
+  my $res      = hash_save( $file_name, $hash_ref );
+  my $hash_ref = hash_load( $file_name );
   
   my $perl_pkg_fn = perl_package_to_file( 'Data::Tools' ); # returns "Data/Tools.pm"
+
+  # calculating hex digests
+  my $whirlpool_hex = wp_hex( $data );
+  my $sha1_hex      = sha1_hex( $data );
+  my $md5_hex       = md5_hex( $data );
 
 =head1 FUNCTIONS
 
@@ -257,6 +301,12 @@ INIT  { __url_escapes_init(); }
 
   (more docs)
 
+=head1 GITHUB REPOSITORY
+
+  git@github.com:cade4/perl-time-profiler.git
+  
+  git clone git://github.com/cade4/perl-data-tools.git
+  
 =head1 AUTHOR
 
   Vladi Belperchinov-Shabanski "Cade"
