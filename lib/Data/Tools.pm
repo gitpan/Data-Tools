@@ -11,11 +11,13 @@
 package Data::Tools;
 use strict;
 use Exporter;
+use Carp;
 use Digest::Whirlpool;
 use Digest::MD5;
 use Digest::SHA1;
 
-our $VERSION = '1.02';
+our $VERSION = '1.04';
+
 our @ISA    = qw( Exporter );
 our @EXPORT = qw(
               file_save
@@ -27,11 +29,20 @@ our @EXPORT = qw(
               str2hash 
               hash2str
               
+              hash_uc
+              hash_lc
+              hash_uc_ipl
+              hash_lc_ipl
+              
               hash_save
               hash_load
 
               str_url_escape 
               str_url_unescape 
+              
+              str_html_escape 
+              str_html_unescape 
+              
               str_hex 
               str_unhex
               
@@ -145,6 +156,31 @@ sub str_url_unescape
   return $text;
 }
 
+my %HTML_ESCAPES = (
+                   '>' => '&gt;',
+                   '<' => '&lt;',
+                   "'" => '&rsquo;',
+                   "`" => '&lsquo;',
+                   );
+
+sub str_html_escape
+{
+  my $text = shift;
+
+  $text =~ s/([<>])/$HTML_ESCAPES{ $1 }/ge;
+  
+  return $text;
+}
+
+sub str_html_unescape
+{
+  my $text = shift;
+
+  confess "still not implemented";
+  
+  return $text;
+}
+
 sub str_hex
 {
   my $text = shift;
@@ -187,6 +223,45 @@ sub hash2str
     $s .= "$k=$v\n";
     }
   return $s;
+}
+
+##############################################################################
+
+sub __hash_ulc
+{
+  my $hr  = shift;
+  my $uc  = shift;
+  my $ipl = shift;
+  
+  my $nr = $ipl ? $hr : {};
+  while( my ( $k, $v ) = each %$hr )
+    {
+    my $old_k = $k;
+    $k = $uc ? uc( $k ) : lc( $k );
+    $nr->{ $k } = $v;
+    delete $nr->{ $old_k } if $ipl and $k ne $old_k;
+    }
+  return $nr;  
+}
+
+sub hash_uc
+{
+  return __hash_ulc( shift(), 1, 0 );
+}
+
+sub hash_lc
+{
+  return __hash_ulc( shift(), 0, 0 );
+}
+
+sub hash_uc_ipl
+{
+  return __hash_ulc( shift(), 1, 1 );
+}
+
+sub hash_lc_ipl
+{
+  return __hash_ulc( shift(), 0, 1 );
 }
 
 ##############################################################################
@@ -303,9 +378,9 @@ INIT  { __url_escapes_init(); }
 
 =head1 GITHUB REPOSITORY
 
-  git@github.com:cade4/perl-time-profiler.git
+  git@github.com:cade-vs/perl-time-profiler.git
   
-  git clone git://github.com/cade4/perl-data-tools.git
+  git clone git://github.com/cade-vs/perl-data-tools.git
   
 =head1 AUTHOR
 

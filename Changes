@@ -1,5 +1,13 @@
 Revision history for Perl extension Data::Tools
 
+1.04  2013.05.24
+
+    1. changed github urls
+
+1.03  2013.05.04
+  
+    1. added hash_uc()/hash_lc()
+
 1.02  2013.03.24
 
     1. added digest funcs
