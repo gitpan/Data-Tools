@@ -16,10 +16,11 @@ use Digest::Whirlpool;
 use Digest::MD5;
 use Digest::SHA1;
 
-our $VERSION = '1.04';
+our $VERSION = '1.05';
 
 our @ISA    = qw( Exporter );
 our @EXPORT = qw(
+
               file_save
               file_load
               
@@ -36,6 +37,8 @@ our @EXPORT = qw(
               
               hash_save
               hash_load
+              
+              hash_validate
 
               str_url_escape 
               str_url_unescape 
@@ -45,8 +48,6 @@ our @EXPORT = qw(
               
               str_hex 
               str_unhex
-              
-              url2hash
               
               perl_package_to_file
 
@@ -284,6 +285,56 @@ sub hash_load
 
 ##############################################################################
 
+sub hash_validate
+{
+  my $hr = shift; # hashref to validate
+  my $vr = shift; # hashref with expectations
+  
+  my @err; # invalid keys
+  
+  while( my ( $k, $v ) = each %$hr )
+    {
+    if( ! exists $vr->{ $k } )
+      {
+      push @err, $k;
+      next;
+      }
+    
+    my $vv = $vr->{ $k };
+    $vv =~ s/^\s*//;
+    $vv =~ s/\s*$//;
+    
+    if( $vv =~ /^(int|real|float)\s*(\(\s*(\d+)\s*,\s*(\d+)\s*\))?\s*$/i )
+      {
+      my $y = uc $1;
+      my $f = $3;
+      my $t = $4;
+
+      $v =~ s/[\s'`]+//g;
+      
+      my $re;
+      $re = qr(^[-+]?\d+$) if $y eq 'INT';
+      $re = qr(^[-+]?\d+(\.\d*)?$) if $y eq 'REAL' or $y eq 'FLOAT';
+
+      # print STDERR Data::Dumper::Dumper( '-'x20, $k, $v, $vv, $re, '='x20  );
+
+      if( $v =~ /$re/ )
+        {
+        push @err, $k if $f ne '' and $v < $f;
+        push @err, $k if $t ne '' and $v > $t;
+        }
+      else
+        {
+        push @err, $k;
+        }  
+      }
+    }
+    
+  return wantarray() ? @err : @err > 0 ? 0 : 1;
+}
+
+##############################################################################
+
 sub perl_package_to_file
 {
   my $s = shift;
@@ -341,27 +392,61 @@ INIT  { __url_escapes_init(); }
 
   use Data::Tools qw( :all );
 
-  my $res  = file_save( $file_name, 'file data here' );
-  my $data = file_load( $file_name );
+  # --------------------------------------------------------------------------
+
+  my $res     = file_save( $file_name, 'file content here' );
+  my $content = file_load( $file_name );
+
+  # --------------------------------------------------------------------------
   
   my $res  = dir_path_make( '/path/to/somewhere' ); # create full path with 0700
   my $res  = dir_path_make( '/new/path', MASK => 0755 ); # ...with mask 0755
   my $path = dir_path_ensure( '/path/s/t/h' ); # ensure path exists, check+make
-  
-  my $escaped   = str_url_escape( $plain_str ); # url-style %XX escaping
-  my $plain_str = str_url_unescape( $escaped );
-  
-  my $hex_str   = str_hex( $plain_str ); # hex-style string escaping
-  my $plain_str = str_unhex( $hex_str );
+
+  # --------------------------------------------------------------------------
   
   my $hash_str = hash2str( $hash_ref ); # convert hash to string "key=value\n"
-  my $hash_ref = str2hash( $hash_str );
+  my $hash_ref = str2hash( $hash_str ); # convert str "key-value\n" to hash
+
+  hash_uc
+  hash_lc
+  hash_uc_ipl
+  hash_lc_ipl
   
   # save/load hash in str_url_escaped form to/from a file
   my $res      = hash_save( $file_name, $hash_ref );
   my $hash_ref = hash_load( $file_name );
+
+  # validate hash by example
+  my $validate = {
+                 KEY1 => 'INT',
+                 KEY2 => 'INT(-5,10)',
+                 KEY3 => 'REAL',
+                 };
+  my $data     = {
+                 KEY1 => '123',
+                 KEY2 =>  '-1',
+                 KEY3 =>  '1 234 567.89',
+                 }               
+  
+  my @invalid_keys = hash_validate( $data, $validate );
+
+  # --------------------------------------------------------------------------
+  
+  my $escaped   = str_url_escape( $plain_str ); # URL-style %XX escaping
+  my $plain_str = str_url_unescape( $escaped );
+
+  my $escaped   = str_html_escape( $plain_str ); # HTML-style &name; escaping
+  my $plain_str = str_html_unescape( $escaped );
+  
+  my $hex_str   = str_hex( $plain_str ); # HEX-style XX string escaping
+  my $plain_str = str_unhex( $hex_str );
+
+  # --------------------------------------------------------------------------
   
   my $perl_pkg_fn = perl_package_to_file( 'Data::Tools' ); # returns "Data/Tools.pm"
+
+  # --------------------------------------------------------------------------
 
   # calculating hex digests
   my $whirlpool_hex = wp_hex( $data );
