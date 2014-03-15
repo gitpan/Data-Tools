@@ -16,7 +16,7 @@ use Digest::Whirlpool;
 use Digest::MD5;
 use Digest::SHA1;
 
-our $VERSION = '1.05';
+our $VERSION = '1.06';
 
 our @ISA    = qw( Exporter );
 our @EXPORT = qw(
@@ -29,6 +29,8 @@ our @EXPORT = qw(
 
               str2hash 
               hash2str
+
+              url2hash
               
               hash_uc
               hash_lc
@@ -59,7 +61,8 @@ our @EXPORT = qw(
 
 our %EXPORT_TAGS = (
                    
-                   'all' => \@EXPORT,
+                   'all'  => \@EXPORT,
+                   'none' => [],
                    
                    );
             
@@ -226,6 +229,17 @@ sub hash2str
   return $s;
 }
 
+sub url2hash
+{
+  my $str = shift;
+  my %hash;
+  for( split( /&/, $str ) )
+    {
+    $hash{ uc str_url_unescape( $1 ) } = str_url_unescape( $2 ) if ( /^([^=]+)=(.*)$/ );
+    }
+  return \%hash;
+}
+
 ##############################################################################
 
 sub __hash_ulc
@@ -273,14 +287,14 @@ sub hash_save
   # @_ array of hash references
   my $data;
   $data .= hash2str( $_ ) for @_;
-  return save_file( $fn, $data );
+  return file_save( $fn, $data );
 }
 
 sub hash_load
 {
   my $fn = shift;
   
-  return str2hash( load_file( $fn ) );
+  return str2hash( file_load( $fn ) );
 }
 
 ##############################################################################
@@ -301,10 +315,16 @@ sub hash_validate
       }
     
     my $vv = $vr->{ $k };
-    $vv =~ s/^\s*//;
-    $vv =~ s/\s*$//;
     
-    if( $vv =~ /^(int|real|float)\s*(\(\s*(\d+)\s*,\s*(\d+)\s*\))?\s*$/i )
+    if( ref( $v ) eq 'HASH' )
+      {
+      my @e = hash_validate( $v, $vv );
+      for my $e ( @e )
+        {
+        push @err, "$k/$e";
+        }
+      }
+    elsif( $vv =~ /^\s*(int|real|float)\s*(\(\s*(\d+)\s*,\s*(\d+)\s*\))?\s*$/i )
       {
       my $y = uc $1;
       my $f = $3;
@@ -313,10 +333,10 @@ sub hash_validate
       $v =~ s/[\s'`]+//g;
       
       my $re;
-      $re = qr(^[-+]?\d+$) if $y eq 'INT';
-      $re = qr(^[-+]?\d+(\.\d*)?$) if $y eq 'REAL' or $y eq 'FLOAT';
+      $re = qr/^[-+]?\d+$/ if $y eq 'INT';
+      $re = qr/^[-+]?\d+(\.\d*)?$/ if $y eq 'REAL' or $y eq 'FLOAT';
 
-      # print STDERR Data::Dumper::Dumper( '-'x20, $k, $v, $vv, $re, '='x20  );
+      #print STDERR Data::Dumper::Dumper( '=int=real='x5, $k, $v, $vv, $re  );
 
       if( $v =~ /$re/ )
         {
@@ -328,9 +348,24 @@ sub hash_validate
         push @err, $k;
         }  
       }
+    elsif( $vv =~ /^\s*RE(I)?:\s*(.*?)\s*$/i )
+      {
+      my $ic = $1; # ignore case
+      my $re = $ic ? qr/$2/i : qr/$2/;
+      # print Data::Dumper::Dumper( '=re=rei='x5, $k, $v, $vv, $re, $ic );
+      push @err, $k unless $v =~ /$re/;
+      }  
+    elsif( $vv =~ /^\s*(-d|dir|directory)\s*$/i )
+      {
+      push @err, $k unless -d $v;
+      }  
+    elsif( $vv =~ /^\s*(-f|file)\s*$/i )
+      {
+      push @err, $k unless -f $v;
+      }  
     }
     
-  return wantarray() ? @err : @err > 0 ? 0 : 1;
+  return wantarray() ? sort( @err ) : @err > 0 ? 0 : 1;
 }
 
 ##############################################################################
@@ -390,7 +425,9 @@ INIT  { __url_escapes_init(); }
 
 =head1 SYNOPSIS
 
-  use Data::Tools qw( :all );
+  use Data::Tools qw( :all );  # import all functions
+  use Data::Tools;             # the same as :all :) 
+  use Data::Tools qw( :none ); # do not import anything, use full package names
 
   # --------------------------------------------------------------------------
 
@@ -407,29 +444,49 @@ INIT  { __url_escapes_init(); }
   
   my $hash_str = hash2str( $hash_ref ); # convert hash to string "key=value\n"
   my $hash_ref = str2hash( $hash_str ); # convert str "key-value\n" to hash
+  
+  my $hash_ref = url2hash( 'key1=val1&key2=val2&testing=tralala);
+  # $hash_ref will be { key1 => 'val1', key2 => 'val2', testing => 'tralala' }
 
-  hash_uc
-  hash_lc
-  hash_uc_ipl
-  hash_lc_ipl
+  my $hash_ref_with_upper_case_keys = hash_uc( $hash_ref_with_lower_case_keys );
+  my $hash_ref_with_lower_case_keys = hash_lc( $hash_ref_with_upper_case_keys );
+
+  hash_uc_ipl( $hash_ref_to_be_converted_to_upper_case_keys );
+  hash_lc_ipl( $hash_ref_to_be_converted_to_lower_case_keys );
   
   # save/load hash in str_url_escaped form to/from a file
   my $res      = hash_save( $file_name, $hash_ref );
   my $hash_ref = hash_load( $file_name );
 
-  # validate hash by example
-  my $validate = {
-                 KEY1 => 'INT',
-                 KEY2 => 'INT(-5,10)',
-                 KEY3 => 'REAL',
-                 };
-  my $data     = {
-                 KEY1 => '123',
-                 KEY2 =>  '-1',
-                 KEY3 =>  '1 234 567.89',
-                 }               
+  # validate (nested) hash by example
   
-  my @invalid_keys = hash_validate( $data, $validate );
+  # validation example nested hash
+  my $validate_hr = {
+                    A => 'INT',
+                    B => 'INT(-5,10)',
+                    C => 'REAL',
+                    D => {
+                         E => 'RE:\d+[a-f]*',  # regexp match
+                         F => 'REI:\d+[a-f]*', # case insensitive regexp match
+                         },
+                    DIR1  => '-d',   # must be existing directory
+                    DIR2  => 'dir',  # must be existing directory
+                    FILE1 => '-f',   # must be existing file  
+                    FILE2 => 'file', # must be existing file  
+                    };
+  # actual nested hash to be verified if looks like the example
+  my $data_hr     = {
+                    A => '123',
+                    B =>  '-1',
+                    C =>  '1 234 567.89',
+                    D => {
+                         E => '123abc',
+                         F => '456FFF',
+                         },
+                    }               
+  
+  my @invalid_keys = hash_validate( $data_hr, $validate_hr );
+  print "YES!" if hash_validate( $data_hr, $validate_hr );
 
   # --------------------------------------------------------------------------
   
@@ -444,7 +501,8 @@ INIT  { __url_escapes_init(); }
 
   # --------------------------------------------------------------------------
   
-  my $perl_pkg_fn = perl_package_to_file( 'Data::Tools' ); # returns "Data/Tools.pm"
+  # converts perl package names to file names, f.e: returns "Data/Tools.pm"
+  my $perl_pkg_fn = perl_package_to_file( 'Data::Tools' );
 
   # --------------------------------------------------------------------------
 
@@ -455,15 +513,39 @@ INIT  { __url_escapes_init(); }
 
 =head1 FUNCTIONS
 
-  (more docs)
+=head2 hash_validate( $data_hr, $validate_hr );
+
+Return value can be either scalar or array context. In scalar context return
+value is true (1) or false (0). In array context it returns list of the invalid
+keys (possibly key paths like 'KEY1/KEY2/KEY3'):
+
+  # array context
+  my @invalid_keys = hash_validate( $data_hr, $validate_hr );
+  
+  # scalar context
+  print "YES!" if hash_validate( $data_hr, $validate_hr );
 
 =head1 TODO
 
   (more docs)
 
+=head1 REQUIRED MODULES
+
+Data::Tools is designed to be simple, compact and self sufficient. 
+However it uses some 3rd party modules:
+
+  * Digest::Whirlpool
+  * Digest::MD5
+  * Digest::SHA1
+
+=head1 SEE ALSO
+
+For more complex cases of nested hash validation, 
+check Data::Validate::Struct module by Thomas Linden, cheers :)
+
 =head1 GITHUB REPOSITORY
 
-  git@github.com:cade-vs/perl-time-profiler.git
+  git@github.com:cade-vs/perl-data-tools.git
   
   git clone git://github.com/cade-vs/perl-data-tools.git
   
